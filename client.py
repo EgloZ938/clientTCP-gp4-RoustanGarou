@@ -344,6 +344,10 @@ class GameUI:
         grid_frame = ttk.Frame(self.frame)
         grid_frame.grid(row=0, column=0, padx=10, pady=10)
 
+        # Style pour les cellules
+        style = ttk.Style()
+        style.configure('Cell.TLabel', font=('TkDefaultFont', 12, 'bold'), padding=5)
+
         self.grid_cells = []
         for i in range(5):
             row = []
@@ -384,11 +388,11 @@ class GameUI:
     def update_grid(self, environment: List[str]):
         """Met à jour l'affichage de la grille"""
         symbols = {
-            'L': '🐺',  # Loup
-            'V': '👤',  # Villageois
-            'P': '🟢',  # Joueur
-            ' ': '⬜',  # Case vide
-            'X': '⬛'   # Hors limites/invisible
+            'L': 'L',    # Loup
+            'V': 'V',    # Villageois
+            'P': 'P',    # Joueur (Player)
+            ' ': '.',    # Case vide
+            'X': '#'     # Hors limites/invisible
         }
         
         size = 5  # Taille de la grille d'affichage
@@ -397,7 +401,17 @@ class GameUI:
                 index = i * size + j
                 if index < len(environment):
                     symbol = symbols.get(environment[index], '?')
-                    self.grid_cells[i][j].configure(text=symbol)
+                    # Configuration des couleurs selon le type
+                    if symbol == 'L':
+                        cell_style = {'foreground': 'red'}
+                    elif symbol == 'V':
+                        cell_style = {'foreground': 'blue'}
+                    elif symbol == 'P':
+                        cell_style = {'foreground': 'green'}
+                    else:
+                        cell_style = {'foreground': 'black'}
+                    
+                    self.grid_cells[i][j].configure(text=symbol, **cell_style)
 
     def set_move_enabled(self, enabled: bool):
         """Active/désactive les boutons de mouvement"""
