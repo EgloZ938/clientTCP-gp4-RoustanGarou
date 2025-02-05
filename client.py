@@ -132,47 +132,85 @@ class ClientApp:
         self.setup_gui()
         
     def setup_gui(self):
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # Frame principale
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.grid(row=0, column=0, sticky='nsew')
         
-        # Section connexion
-        connection_frame = ttk.Frame(main_frame)
-        connection_frame.grid(row=0, column=0, columnspan=2, pady=5)
+        # Configure les poids des lignes et colonnes
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
         
-        ttk.Label(connection_frame, text="Nom du joueur:").grid(row=0, column=0, pady=5)
-        ttk.Entry(connection_frame, textvariable=self.player_name).grid(row=0, column=1, pady=5)
+        # Section connexion (en haut)
+        connection_frame = ttk.Frame(self.main_frame)
+        connection_frame.grid(row=0, column=0, columnspan=3, pady=5, sticky='ew')
         
-        ttk.Label(connection_frame, text="ID Partie:").grid(row=1, column=0, pady=5)
-        ttk.Entry(connection_frame, textvariable=self.game_id).grid(row=1, column=1, pady=5)
+        ttk.Label(connection_frame, text="Nom du joueur:").grid(row=0, column=0, padx=5, pady=5)
+        ttk.Entry(connection_frame, textvariable=self.player_name).grid(row=0, column=1, padx=5, pady=5)
         
-        self.connect_button = ttk.Button(connection_frame, text="Connexion", command=self.connect_to_server)
-        self.connect_button.grid(row=2, column=0, pady=10)
+        ttk.Label(connection_frame, text="ID Partie:").grid(row=0, column=2, padx=5, pady=5)
+        ttk.Entry(connection_frame, textvariable=self.game_id).grid(row=0, column=3, padx=5, pady=5)
         
-        self.disconnect_button = ttk.Button(connection_frame, text="Déconnexion", command=self.disconnect_from_server, state='disabled')
-        self.disconnect_button.grid(row=2, column=1, pady=10)
+        button_frame = ttk.Frame(connection_frame)
+        button_frame.grid(row=0, column=4, padx=5, pady=5)
         
-        # Bouton démarrer partie
-        self.start_game_button = ttk.Button(connection_frame, text="Démarrer la partie", command=self.send_start_game, state='disabled')
-        self.start_game_button.grid(row=2, column=2, pady=10, padx=5)
+        self.connect_button = ttk.Button(button_frame, text="Connexion", command=self.connect_to_server)
+        self.connect_button.pack(side='left', padx=2)
         
-        # Zone de chat et jeu
-        self.chat_frame = ttk.Frame(main_frame)
-        self.chat_frame.grid(row=3, column=0, columnspan=2, pady=5)
+        self.disconnect_button = ttk.Button(button_frame, text="Déconnexion", 
+                                          command=self.disconnect_from_server, state='disabled')
+        self.disconnect_button.pack(side='left', padx=2)
+        
+        self.start_game_button = ttk.Button(button_frame, text="Démarrer la partie",
+                                          command=self.send_start_game, state='disabled')
+        self.start_game_button.pack(side='left', padx=2)
+        
+        # Création d'un canvas scrollable pour le contenu principal
+        canvas = tk.Canvas(self.main_frame)
+        scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = ttk.Frame(canvas)
+        
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Zone de jeu (sera visible quand la partie démarre)
+        self.game_frame = ttk.Frame(self.scrollable_frame)
+        self.game_frame.grid(row=0, column=0, columnspan=2, pady=10)
+        
+        # Zone de chat et liste des joueurs
+        chat_section = ttk.Frame(self.scrollable_frame)
+        chat_section.grid(row=1, column=0, padx=10, pady=5)
         
         # Zone de chat
-        self.chat_text = tk.Text(self.chat_frame, height=20, width=50, state='disabled')
+        self.chat_text = tk.Text(chat_section, height=20, width=50, state='disabled')
         self.chat_text.grid(row=0, column=0, columnspan=2, pady=5)
         
-        # Liste des joueurs
-        ttk.Label(main_frame, text="Joueurs connectés:").grid(row=2, column=2, padx=10)
-        self.players_list = tk.Listbox(main_frame, height=10, width=20)
-        self.players_list.grid(row=3, column=2, padx=10, rowspan=2)
-        
         # Zone de saisie message
-        self.message_entry = ttk.Entry(self.chat_frame, textvariable=self.message_var, state='disabled')
+        self.message_entry = ttk.Entry(chat_section, textvariable=self.message_var, state='disabled')
         self.message_entry.grid(row=1, column=0, pady=5)
-        self.send_button = ttk.Button(self.chat_frame, text="Envoyer", command=self.send_message, state='disabled')
+        self.send_button = ttk.Button(chat_section, text="Envoyer", 
+                                    command=self.send_message, state='disabled')
         self.send_button.grid(row=1, column=1, pady=5)
+        
+        # Liste des joueurs
+        players_section = ttk.Frame(self.scrollable_frame)
+        players_section.grid(row=1, column=2, padx=10, pady=5)
+        
+        ttk.Label(players_section, text="Joueurs connectés:").grid(row=0, column=0)
+        self.players_list = tk.Listbox(players_section, height=10, width=20)
+        self.players_list.grid(row=1, column=0)
+        
+        # Configuration du scroll
+        canvas.grid(row=1, column=0, columnspan=3, sticky="nsew")
+        scrollbar.grid(row=1, column=3, sticky="ns")
+        
+        # Configuration des poids pour le redimensionnement
+        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(0, weight=1)
         
 
     def send_start_game(self):
@@ -285,12 +323,10 @@ class ClientApp:
         self.game_started = True
         self.start_game_button.configure(state='disabled')
         
-        # Crée la frame de jeu
-        game_frame = ttk.Frame(self.root)
-        game_frame.grid(row=1, column=0, columnspan=3, padx=10, pady=10)
-        
-        self.game_ui = GameUI(game_frame)
-        self.game_ui.on_move = self.send_move
+        # Créer l'interface de jeu dans la frame dédiée
+        if self.game_ui is None:
+            self.game_ui = GameUI(self.game_frame)
+            self.game_ui.on_move = self.send_move
 
     def send_move(self, direction: int):
         """Envoie un mouvement au serveur"""
