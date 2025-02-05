@@ -65,12 +65,37 @@ class Connexion:
             return False, str(e)
             
     def receive_messages(self):
+        """Reçoit et traite les messages du serveur"""
+        buffer = ""
         while self.connected:
             try:
                 data = self.socket.recv(1024).decode()
-                if data:
-                    message = json.loads(data)
-                    self.message_callback(message)
+                if not data:
+                    break
+                    
+                buffer += data
+                
+                # Traite tous les messages complets dans le buffer
+                while True:
+                    try:
+                        # Trouve la première occurrence d'un message JSON complet
+                        json_end = buffer.find('}') + 1
+                        if json_end <= 0:
+                            break
+                            
+                        message = json.loads(buffer[:json_end])
+                        self.message_callback(message)
+                        
+                        # Retire le message traité du buffer
+                        buffer = buffer[json_end:].strip()
+                        
+                    except json.JSONDecodeError:
+                        # Si le message n'est pas un JSON complet, on attend plus de données
+                        break
+                    except Exception as e:
+                        print(f"Erreur de traitement du message: {str(e)}")
+                        break
+                        
             except Exception as e:
                 print(f"Erreur de réception: {str(e)}")
                 self.connected = False
