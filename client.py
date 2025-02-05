@@ -96,6 +96,11 @@ class ClientApp:
         self.chat_text = tk.Text(main_frame, height=20, width=50, state='disabled')
         self.chat_text.grid(row=3, column=0, columnspan=2, pady=5)
         
+        # Liste des joueurs
+        ttk.Label(main_frame, text="Joueurs connectés:").grid(row=2, column=2, padx=10)
+        self.players_list = tk.Listbox(main_frame, height=10, width=20)
+        self.players_list.grid(row=3, column=2, padx=10, rowspan=2)
+        
         # Zone de saisie message
         ttk.Entry(main_frame, textvariable=self.message_var).grid(row=4, column=0, pady=5)
         ttk.Button(main_frame, text="Envoyer", command=self.send_message).grid(row=4, column=1, pady=5)
@@ -133,8 +138,8 @@ class ClientApp:
             self.add_message(f"Erreur d'envoi: {error}")
             
     def handle_message(self, message):
-        if message.get("type") == "game_status":
-            self.update_game_status(message)
+        if message.get("type") == "player_list":
+            self.update_players_list(message.get("players", []))
         elif message.get("type") == "chat":
             self.add_message(f"{message.get('player')}: {message.get('content')}")
         elif message.get("type") == "role_assignment":
@@ -159,6 +164,11 @@ class ClientApp:
         
     def cleanup(self):
         self.network.cleanup()
+
+    def update_players_list(self, players):
+        self.players_list.delete(0, tk.END)
+        for player in players:
+            self.players_list.insert(tk.END, player)
 
 if __name__ == "__main__":
     app = ClientApp()
