@@ -1,25 +1,65 @@
 import socket
 import threading
 import json
+import random
 from typing import Dict, List
+from game_logic import GameLogic
 
 class GameRoom:
     def __init__(self, game_id: str):
         self.game_id = game_id
-        self.players: Dict[socket.socket, str] = {}  # socket -> player_name
+        self.players: Dict[socket.socket, dict] = {}  # socket -> {name: str, role: None}
         self.messages: List[dict] = []
         self.started = False
+        self.game_logic = GameLogic()
+        self.current_turn = None
+        self.min_players = 4  # Minimum requis pour démarrer
 
     def add_player(self, client_socket: socket.socket, player_name: str) -> None:
-        self.players[client_socket] = player_name
+        """Ajoute un joueur sans rôle"""
+        self.players[client_socket] = {
+            "name": player_name,
+            "role": None
+        }
         self.broadcast_player_list()
+        
+        # Vérifie si on peut démarrer
+        if len(self.players) >= self.min_players:
+            self.broadcast_system_message(f"La partie peut démarrer ! ({len(self.players)} joueurs connectés)")
+
+    def assign_roles(self) -> None:
+        """Attribue les rôles aléatoirement"""
+        player_sockets = list(self.players.keys())
+        nb_players = len(player_sockets)
+        nb_wolves = max(1, nb_players // 4)  # 1 loup pour 4 joueurs
+
+        # Mélange la liste et assigne les rôles
+        random.shuffle(player_sockets)
+        
+        for i, socket in enumerate(player_sockets):
+            role = "loup" if i < nb_wolves else "villageois"
+            self.players[socket]["role"] = role
+            
+            # Envoie le rôle au joueur
+            role_message = {
+                "type": "role_assignment",
+                "role": role
+            }
+            self.send_message_to_player(socket, role_message)
 
     def remove_player(self, client_socket: socket.socket) -> None:
+        """Retire un joueur de la partie"""
         if client_socket in self.players:
-            player_name = self.players[client_socket]
+            player_name = self.players[client_socket]["name"]  # Accès correct au nom du joueur
             del self.players[client_socket]
             self.broadcast_system_message(f"{player_name} a quitté la partie.")
             self.broadcast_player_list()
+            
+            # Si la partie est en cours, on vérifie s'il faut mettre à jour le tour
+            if self.started and client_socket == self.current_turn:
+                if self.players:  # S'il reste des joueurs
+                    self.current_turn = list(self.players.keys())[0]
+                    self.broadcast_game_state()
 
     def broadcast_message(self, message: dict) -> None:
         """Envoie un message à tous les joueurs de la room"""
@@ -40,11 +80,77 @@ class GameRoom:
 
     def broadcast_player_list(self) -> None:
         """Envoie la liste mise à jour des joueurs à tous les participants"""
+        # Extraction juste des noms des joueurs
+        player_names = [player["name"] for player in self.players.values()]
+    
         message = {
             "type": "player_list",
-            "players": list(self.players.values())
+            "players": player_names  # On envoie juste la liste des noms
         }
         self.broadcast_message(message)
+
+    def start_game(self, initiator_socket: socket.socket) -> bool:
+        """Démarre la partie"""
+        if self.started:
+            return False
+            
+        if len(self.players) < self.min_players:
+            self.send_message_to_player(initiator_socket, {
+                "type": "error",
+                "content": f"Il faut au moins {self.min_players} joueurs pour démarrer"
+            })
+            return False
+
+        self.started = True
+        self.assign_roles()
+        
+        # Initialise les positions des joueurs
+        for socket, player in self.players.items():
+            self.game_logic.add_player(player["name"], player["role"])
+
+        # Définit le premier joueur
+        self.current_turn = list(self.players.keys())[0]
+        
+        # Annonce le début de la partie
+        self.broadcast_system_message("La partie commence !")
+        self.broadcast_game_state()
+        return True
+
+    def broadcast_game_state(self):
+        """Envoie l'état du jeu à chaque joueur"""
+        for socket, player in self.players.items():
+            environment = self.game_logic.get_environment(player["name"])
+            state_message = {
+                "type": "game_state",
+                "environment": environment,
+                "is_your_turn": socket == self.current_turn
+            }
+            self.send_message_to_player(socket, state_message)
+
+    def handle_move(self, client_socket: socket.socket, direction: int):
+        """Gère les déplacements des joueurs"""
+        if not self.started:
+            return
+            
+        if client_socket != self.current_turn:
+            return
+            
+        player = self.players[client_socket]
+        if self.game_logic.move_player(player["name"], direction):
+            # Passe au joueur suivant
+            player_sockets = list(self.players.keys())
+            current_index = player_sockets.index(client_socket)
+            self.current_turn = player_sockets[(current_index + 1) % len(player_sockets)]
+            
+            # Met à jour l'état pour tous les joueurs
+            self.broadcast_game_state()
+
+    def send_message_to_player(self, client_socket: socket.socket, message: dict):
+        """Envoie un message à un joueur spécifique"""
+        try:
+            client_socket.send(json.dumps(message).encode())
+        except Exception as e:
+            print(f"Erreur d'envoi: {str(e)}")
 
 class GameServer:
     def __init__(self, host: str = 'localhost', port: int = 12345):
@@ -88,10 +194,20 @@ class GameServer:
 
         if message_type == "connection":
             self.handle_connection(client_socket, message)
+        elif message_type == "start_game":
+            self.handle_start_game(client_socket, game_id)
         elif message_type == "message":
             self.handle_chat_message(client_socket, message)
+        elif message_type == "move":
+            self.handle_move(client_socket, message)
         elif message_type == "disconnect":
             self.handle_disconnect(client_socket, message)
+
+    def handle_start_game(self, client_socket: socket.socket, game_id: str):
+        """Gère la demande de démarrage de partie"""
+        if game_id in self.rooms:
+            room = self.rooms[game_id]
+            room.start_game(client_socket)
 
     def handle_disconnect(self, client_socket: socket.socket, message: dict):
         """Gère la déconnexion volontaire d'un client"""
@@ -118,15 +234,14 @@ class GameServer:
         game_id = message.get("game_id")
         player_name = message.get("name")
 
-        # Crée la room si elle n'existe pas
         if game_id not in self.rooms:
             self.rooms[game_id] = GameRoom(game_id)
 
         room = self.rooms[game_id]
+        # Plus de rôle à la connexion
         room.add_player(client_socket, player_name)
         self.client_room[client_socket] = game_id
 
-        # Annonce l'arrivée du nouveau joueur
         room.broadcast_system_message(f"{player_name} a rejoint la partie!")
 
     def handle_chat_message(self, client_socket: socket.socket, message: dict):
@@ -152,6 +267,15 @@ class GameServer:
                     del self.rooms[game_id]
             del self.client_room[client_socket]
         client_socket.close()
+
+    def handle_move(self, client_socket: socket.socket, message: dict):
+        """Gère les déplacements des joueurs"""
+        game_id = message.get("game_id")
+        direction = message.get("direction")
+        
+        if game_id in self.rooms:
+            room = self.rooms[game_id]
+            room.handle_move(client_socket, direction)
 
 if __name__ == "__main__":
     server = GameServer()
