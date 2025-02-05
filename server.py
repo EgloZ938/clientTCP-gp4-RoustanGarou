@@ -90,6 +90,28 @@ class GameServer:
             self.handle_connection(client_socket, message)
         elif message_type == "message":
             self.handle_chat_message(client_socket, message)
+        elif message_type == "disconnect":
+            self.handle_disconnect(client_socket, message)
+
+    def handle_disconnect(self, client_socket: socket.socket, message: dict):
+        """Gère la déconnexion volontaire d'un client"""
+        self.disconnect_client(client_socket)
+
+    def disconnect_client(self, client_socket: socket.socket):
+        """Gère la déconnexion d'un client"""
+        try:
+            if client_socket in self.client_room:
+                game_id = self.client_room[client_socket]
+                room = self.rooms.get(game_id)
+                if room:
+                    # Récupérer le nom du joueur avant de le supprimer
+                    player_name = room.players.get(client_socket, "Un joueur")
+                    room.remove_player(client_socket)
+                    if not room.players:  # Si la room est vide
+                        del self.rooms[game_id]
+                del self.client_room[client_socket]
+        finally:
+            client_socket.close()
 
     def handle_connection(self, client_socket: socket.socket, message: dict):
         """Gère les nouvelles connexions"""

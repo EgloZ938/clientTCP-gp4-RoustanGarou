@@ -9,11 +9,16 @@ class Connexion:
         self.socket = None
         self.connected = False
         self.message_callback = message_callback
+        self.player_name = None
+        self.game_id = None
         
     def connect(self, host, port, player_name, game_id):
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((host, port))
+            
+            self.player_name = player_name
+            self.game_id = game_id
             
             player_info = {
                 "type": "connection",
@@ -28,6 +33,19 @@ class Connexion:
             return True, "Connecté au serveur!"
         except Exception as e:
             return False, str(e)
+        
+    def send_disconnect_message(self):
+        """Envoie un message de déconnexion au serveur"""
+        if self.connected and self.socket:
+            try:
+                disconnect_msg = {
+                    "type": "disconnect",
+                    "game_id": self.game_id,
+                    "name": self.player_name
+                }
+                self.socket.send(json.dumps(disconnect_msg).encode())
+            except:
+                pass
             
     def send_message(self, player_name, game_id, content):
         if not self.connected:
@@ -58,6 +76,8 @@ class Connexion:
                 break
                 
     def cleanup(self):
+        if self.connected:
+            self.send_disconnect_message()
         if self.socket:
             self.connected = False
             self.socket.close()
@@ -73,9 +93,13 @@ class ClientApp:
         self.player_name = tk.StringVar()
         self.game_id = tk.StringVar()
         self.message_var = tk.StringVar()
+        self.is_connected = False
         
         # Initialisation du gestionnaire réseau
         self.network = Connexion(self.handle_message)
+        
+        # Gestion de la fermeture de fenêtre
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.setup_gui()
         
@@ -84,13 +108,20 @@ class ClientApp:
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Section connexion
-        ttk.Label(main_frame, text="Nom du joueur:").grid(row=0, column=0, pady=5)
-        ttk.Entry(main_frame, textvariable=self.player_name).grid(row=0, column=1, pady=5)
+        connection_frame = ttk.Frame(main_frame)
+        connection_frame.grid(row=0, column=0, columnspan=2, pady=5)
         
-        ttk.Label(main_frame, text="ID Partie:").grid(row=1, column=0, pady=5)
-        ttk.Entry(main_frame, textvariable=self.game_id).grid(row=1, column=1, pady=5)
+        ttk.Label(connection_frame, text="Nom du joueur:").grid(row=0, column=0, pady=5)
+        ttk.Entry(connection_frame, textvariable=self.player_name).grid(row=0, column=1, pady=5)
         
-        ttk.Button(main_frame, text="Connexion", command=self.connect_to_server).grid(row=2, column=0, columnspan=2, pady=10)
+        ttk.Label(connection_frame, text="ID Partie:").grid(row=1, column=0, pady=5)
+        ttk.Entry(connection_frame, textvariable=self.game_id).grid(row=1, column=1, pady=5)
+        
+        self.connect_button = ttk.Button(connection_frame, text="Connexion", command=self.connect_to_server)
+        self.connect_button.grid(row=2, column=0, pady=10)
+        
+        self.disconnect_button = ttk.Button(connection_frame, text="Déconnexion", command=self.disconnect_from_server, state='disabled')
+        self.disconnect_button.grid(row=2, column=1, pady=10)
         
         # Zone de chat
         self.chat_text = tk.Text(main_frame, height=20, width=50, state='disabled')
@@ -102,8 +133,10 @@ class ClientApp:
         self.players_list.grid(row=3, column=2, padx=10, rowspan=2)
         
         # Zone de saisie message
-        ttk.Entry(main_frame, textvariable=self.message_var).grid(row=4, column=0, pady=5)
-        ttk.Button(main_frame, text="Envoyer", command=self.send_message).grid(row=4, column=1, pady=5)
+        self.message_entry = ttk.Entry(main_frame, textvariable=self.message_var, state='disabled')
+        self.message_entry.grid(row=4, column=0, pady=5)
+        self.send_button = ttk.Button(main_frame, text="Envoyer", command=self.send_message, state='disabled')
+        self.send_button.grid(row=4, column=1, pady=5)
         
     def connect_to_server(self):
         if not self.player_name.get() or not self.game_id.get():
@@ -118,9 +151,38 @@ class ClientApp:
         )
         
         if success:
+            self.is_connected = True
             self.add_message(message)
+            self.update_connection_state()
         else:
             messagebox.showerror("Erreur de connexion", message)
+
+    def disconnect_from_server(self):
+        if self.is_connected:
+            self.network.cleanup()
+            self.is_connected = False
+            self.update_connection_state()
+            self.players_list.delete(0, tk.END)
+            self.add_message("Déconnecté du serveur")
+
+    def update_connection_state(self):
+        """Met à jour l'état des boutons selon la connexion"""
+        if self.is_connected:
+            self.connect_button.configure(state='disabled')
+            self.disconnect_button.configure(state='normal')
+            self.message_entry.configure(state='normal')
+            self.send_button.configure(state='normal')
+        else:
+            self.connect_button.configure(state='normal')
+            self.disconnect_button.configure(state='disabled')
+            self.message_entry.configure(state='disabled')
+            self.send_button.configure(state='disabled')
+
+    def on_closing(self):
+        """Gère la fermeture propre de l'application"""
+        if self.is_connected:
+            self.disconnect_from_server()
+        self.root.destroy()
             
     def send_message(self):
         if not self.message_var.get():
