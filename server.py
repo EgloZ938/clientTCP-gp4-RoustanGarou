@@ -14,6 +14,7 @@ class GameRoom:
         self.game_logic = GameLogic()
         self.current_turn = None
         self.min_players = 4  # Minimum requis pour démarrer
+        self.announced_deaths = set()  # Nouvelle liste pour tracker les morts annoncées
 
     def add_player(self, client_socket: socket.socket, player_name: str) -> None:
         """Ajoute un joueur sans rôle"""
@@ -139,9 +140,9 @@ class GameRoom:
         if self.game_logic.move_player(player["name"], direction):
             # Vérifie si un joueur est mort après le mouvement
             for name, player_info in self.game_logic.players.items():
-                if player_info['status'] == 'dead' and not hasattr(player_info, 'death_announced'):
+                if player_info['status'] == 'dead' and name not in self.announced_deaths:
                     self.broadcast_system_message(f"{name} a été tué par un loup-garou!")
-                    player_info['death_announced'] = True  # Pour ne pas annoncer plusieurs fois
+                    self.announced_deaths.add(name)  # Ajoute à la liste des morts annoncées
 
             # Passe au joueur suivant
             player_sockets = list(self.players.keys())

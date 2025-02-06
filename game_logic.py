@@ -108,10 +108,7 @@ class GameLogic:
         if status == 'dead':
             for i in range(self.size):
                 for j in range(self.size):
-                    if i == y and j == x:
-                        environment.append('P')
-                    else:
-                        environment.append(self.grid[i][j])
+                    environment.append(self.grid[i][j])
             return environment
 
         # On parcourt toute la grille
