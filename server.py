@@ -119,28 +119,43 @@ class GameRoom:
     def broadcast_game_state(self):
         """Envoie l'état du jeu à chaque joueur"""
         for socket, player in self.players.items():
-            environment = self.game_logic.get_environment(player["name"])
+            player_name = player["name"]
+            player_status = self.game_logic.players[player_name]['status']
+            environment = self.game_logic.get_environment(player_name)
             state_message = {
                 "type": "game_state",
                 "environment": environment,
-                "is_your_turn": socket == self.current_turn
+                "is_your_turn": socket == self.current_turn,
+                "player_status": player_status  # Ajout du status
             }
             self.send_message_to_player(socket, state_message)
 
     def handle_move(self, client_socket: socket.socket, direction: int):
         """Gère les déplacements des joueurs"""
-        if not self.started:
+        if not self.started or client_socket != self.current_turn:
             return
-            
-        if client_socket != self.current_turn:
-            return
-            
+                
         player = self.players[client_socket]
         if self.game_logic.move_player(player["name"], direction):
+            # Vérifie si un joueur est mort après le mouvement
+            for name, player_info in self.game_logic.players.items():
+                if player_info['status'] == 'dead' and not hasattr(player_info, 'death_announced'):
+                    self.broadcast_system_message(f"{name} a été tué par un loup-garou!")
+                    player_info['death_announced'] = True  # Pour ne pas annoncer plusieurs fois
+
             # Passe au joueur suivant
             player_sockets = list(self.players.keys())
             current_index = player_sockets.index(client_socket)
-            self.current_turn = player_sockets[(current_index + 1) % len(player_sockets)]
+            
+            # Trouve le prochain joueur vivant
+            next_player_found = False
+            while not next_player_found:
+                current_index = (current_index + 1) % len(player_sockets)
+                next_socket = player_sockets[current_index]
+                next_player = self.players[next_socket]
+                if self.game_logic.players[next_player["name"]]['status'] == 'alive':
+                    next_player_found = True
+                    self.current_turn = next_socket
             
             # Met à jour l'état pour tous les joueurs
             self.broadcast_game_state()

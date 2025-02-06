@@ -325,10 +325,13 @@ class ClientApp:
             
         environment = message.get("environment", [])
         is_your_turn = message.get("is_your_turn", False)
+        player_status = message.get("player_status", "alive")
         
-        self.game_ui.update_grid(environment)
-        self.game_ui.set_move_enabled(is_your_turn)
-    
+        # Mise à jour du status
+        if self.game_ui:
+            self.game_ui.set_status(player_status)
+            self.game_ui.update_grid(environment)
+            self.game_ui.set_move_enabled(is_your_turn and player_status == 'alive')
 
     def start_game_ui(self):
         """Initialise l'interface de jeu"""
@@ -442,12 +445,12 @@ class GameUI:
     def update_grid(self, environment: List[str]):
         """Met à jour l'affichage de la grille"""
         symbols = {
-            'L': 'L',    # Loup
-            'V': 'V',    # Villageois
-            'P': 'P',    # Joueur (vous)
-            ' ': '.',    # Case vide
-            '#': '■',    # Mur
-            'X': ' '     # Hors limites
+        'L': 'L',    # Loup
+        'V': 'V',    # Villageois
+        'P': 'P',    # Joueur
+        ' ': '.',    # Case vide
+        '#': '■',    # Mur
+        'X': ' '     # Hors limites
         }
         
         size = 7
@@ -457,13 +460,15 @@ class GameUI:
                 if index < len(environment):
                     symbol = symbols.get(environment[index], '?')
                     
-                    # Configuration des couleurs selon le type
                     if symbol == 'L':
                         cell_style = {'foreground': 'red', 'text': symbol}
                     elif symbol == 'V':
                         cell_style = {'foreground': 'blue', 'text': symbol}
                     elif symbol == 'P':
-                        cell_style = {'foreground': 'green', 'text': symbol}
+                        if self.role_label.cget("text") == "Mort":
+                            cell_style = {'foreground': 'gray', 'text': '†'}
+                        else:
+                            cell_style = {'foreground': 'green', 'text': symbol}
                     elif symbol == '■':
                         cell_style = {'foreground': 'black', 'text': symbol}
                     elif symbol == '.':
@@ -473,6 +478,10 @@ class GameUI:
                     
                     self.grid_cells[i][j].configure(**cell_style)
 
+    def set_status(self, status: str):
+        """Met à jour le status du joueur"""
+        if status == "dead":
+            self.role_label.configure(text="MORT", foreground='gray')
 
     def set_role(self, role: str):
         """Met à jour l'affichage du rôle"""

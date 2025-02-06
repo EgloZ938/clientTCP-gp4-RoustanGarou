@@ -28,7 +28,8 @@ class GameLogic:
         x, y = self.get_random_empty_position()
         self.players[player_name] = {
             'position': (x, y),
-            'role': role
+            'role': role,
+            'status': 'alive'
         }
         self.grid[y][x] = 'L' if role == 'loup' else 'V'
         return True
@@ -43,18 +44,32 @@ class GameLogic:
         return random.choice(empty_positions)
 
     def move_player(self, player_name: str, direction: int) -> bool:
-        """Déplace un joueur dans une direction donnée"""
-        if player_name not in self.players:
+        if player_name not in self.players or self.players[player_name].get('status') == 'dead':
             return False
 
         x, y = self.players[player_name]['position']
         new_x, new_y = self.get_new_position(x, y, direction)
 
         if self.is_valid_move(new_x, new_y):
+            # Vérifie s'il y a une collision avec un autre joueur
+            for other_name, other_player in self.players.items():
+                if other_name != player_name:
+                    other_x, other_y = other_player['position']
+                    if (new_x, new_y) == (other_x, other_y):
+                        # Si un loup rencontre un villageois
+                        if self.players[player_name]['role'] == 'loup' and \
+                        other_player['role'] == 'villageois' and \
+                        other_player['status'] == 'alive':  # Vérifie si le villageois n'est pas déjà mort
+                            other_player['status'] = 'dead'
+                            # On enlève le villageois mort de la grille
+                            self.grid[other_y][other_x] = ' '
+                            return True
+
             # Efface l'ancienne position
             self.grid[y][x] = ' '
-            # Met à jour la nouvelle position
-            self.grid[new_y][new_x] = 'L' if self.players[player_name]['role'] == 'loup' else 'V'
+            # Met à jour la nouvelle position (seulement si vivant)
+            if self.players[player_name]['status'] == 'alive':
+                self.grid[new_y][new_x] = 'L' if self.players[player_name]['role'] == 'loup' else 'V'
             self.players[player_name]['position'] = (new_x, new_y)
             return True
         return False
@@ -81,15 +96,25 @@ class GameLogic:
                 self.grid[y][x] != '#')
 
     def get_environment(self, player_name: str) -> List[str]:
-        """Retourne l'environnement visible d'un joueur"""
         if player_name not in self.players:
             return []
 
         x, y = self.players[player_name]['position']
         role = self.players[player_name]['role']
+        status = self.players[player_name].get('status', 'alive')  # Nouveau : status du joueur
         environment = []
 
-        # On parcourt toute la grille pour voir les murs (#)
+        # Si le joueur est mort, il voit tout
+        if status == 'dead':
+            for i in range(self.size):
+                for j in range(self.size):
+                    if i == y and j == x:
+                        environment.append('P')
+                    else:
+                        environment.append(self.grid[i][j])
+            return environment
+
+        # On parcourt toute la grille
         for i in range(self.size):
             for j in range(self.size):
                 # Position actuelle du joueur
@@ -107,11 +132,8 @@ class GameLogic:
 
                 # Règles de vision selon le rôle
                 if self.grid[i][j] in ['L', 'V']:
-                    if role == 'loup' and distance <= 1:
-                        # Le loup voit les joueurs à distance 1
-                        environment.append(self.grid[i][j])
-                    elif role == 'villageois' and distance <= 2:
-                        # Les villageois voient à distance 2
+                    if (role == 'loup' and distance <= 2) or \
+                    (role == 'villageois' and distance <= 1):
                         environment.append(self.grid[i][j])
                     else:
                         environment.append(' ')
