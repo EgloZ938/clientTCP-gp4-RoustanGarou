@@ -44,13 +44,14 @@ class GameLogic:
         return random.choice(empty_positions)
 
     def move_player(self, player_name: str, direction: int) -> bool:
+        """Déplace un joueur dans une direction"""
         if player_name not in self.players or self.players[player_name].get('status') == 'dead':
             return False
 
         x, y = self.players[player_name]['position']
         new_x, new_y = self.get_new_position(x, y, direction)
 
-        if self.is_valid_move(new_x, new_y):
+        if self.is_valid_move(new_x, new_y, player_name):  # Ajout de player_name
             # Vérifie s'il y a une collision avec un autre joueur
             for other_name, other_player in self.players.items():
                 if other_name != player_name:
@@ -94,11 +95,23 @@ class GameLogic:
         dx, dy = directions.get(direction, (0, 0))
         return (x + dx, y + dy)
 
-    def is_valid_move(self, x: int, y: int) -> bool:
+    def is_valid_move(self, x: int, y: int, player_name: str) -> bool:  # Ajout de player_name comme paramètre
         """Vérifie si un déplacement est valide"""
-        return (0 <= x < self.size and
-                0 <= y < self.size and
-                self.grid[y][x] != '#')
+        # Vérifie d'abord les limites et les murs
+        if not (0 <= x < self.size and 0 <= y < self.size and self.grid[y][x] != '#'):
+            return False
+
+        # Vérifie les collisions avec d'autres joueurs
+        player = self.players[player_name]
+        if player['role'] != 'loup':  # Si ce n'est pas un loup
+            # Vérifie si la case est occupée par un autre joueur
+            for other_name, other_player in self.players.items():
+                if other_name != player_name:  # Ne pas se compter soi-même
+                    other_x, other_y = other_player['position']
+                    if (x, y) == (other_x, other_y) and other_player['status'] == 'alive':
+                        return False  # Case occupée, mouvement invalide pour un villageois
+
+        return True  # Si toutes les vérifications sont passées, le mouvement est valide
 
     def get_environment(self, player_name: str) -> List[str]:
         if player_name not in self.players:
