@@ -119,6 +119,8 @@ class GameRoom:
 
     def broadcast_game_state(self):
         """Envoie l'état du jeu à chaque joueur"""
+        current_player_name = self.players[self.current_turn]["name"] if self.current_turn else "Personne"
+        
         for socket, player in self.players.items():
             player_name = player["name"]
             player_status = self.game_logic.players[player_name]['status']
@@ -127,7 +129,8 @@ class GameRoom:
                 "type": "game_state",
                 "environment": environment,
                 "is_your_turn": socket == self.current_turn,
-                "player_status": player_status  # Ajout du status
+                "player_status": player_status,
+                "current_player": current_player_name
             }
             self.send_message_to_player(socket, state_message)
 

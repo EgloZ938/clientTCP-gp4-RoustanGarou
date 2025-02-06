@@ -326,10 +326,12 @@ class ClientApp:
         environment = message.get("environment", [])
         is_your_turn = message.get("is_your_turn", False)
         player_status = message.get("player_status", "alive")
+        current_player = message.get("current_player", "En attente...")
         
-        # Mise à jour du status
+        # Mise à jour du status et du tour
         if self.game_ui:
             self.game_ui.set_status(player_status)
+            self.game_ui.set_turn(current_player)
             self.game_ui.update_grid(environment)
             self.game_ui.set_move_enabled(is_your_turn and player_status == 'alive')
 
@@ -413,13 +415,18 @@ class GameUI:
                 row.append(cell)
             self.grid_cells.append(row)
 
-        # Nouveau : Frame pour le rôle
+        # Frame pour le rôle
         role_frame = ttk.Frame(container)
         role_frame.grid(row=0, column=1, padx=10, pady=10, sticky='n')
         
         ttk.Label(role_frame, text="Votre rôle:", font=('TkDefaultFont', 12, 'bold')).grid(row=0, column=0, pady=(0,5))
         self.role_label = ttk.Label(role_frame, text="Non défini", font=('TkDefaultFont', 11))
         self.role_label.grid(row=1, column=0)
+
+        # Ajout du label pour le tour
+        ttk.Label(role_frame, text="Tour de:", font=('TkDefaultFont', 12, 'bold')).grid(row=2, column=0, pady=(15,5))
+        self.turn_label = ttk.Label(role_frame, text="En attente...", font=('TkDefaultFont', 11))
+        self.turn_label.grid(row=3, column=0)
 
         # Boutons de contrôle
         control_frame = ttk.Frame(self.frame)
@@ -489,6 +496,11 @@ class GameUI:
             self.role_label.configure(text="Loup-Garou", foreground='red')
         else:
             self.role_label.configure(text="Villageois", foreground='blue')
+
+
+    def set_turn(self, player_name: str):
+        """Met à jour l'affichage du tour"""
+        self.turn_label.configure(text=player_name)
 
     def set_move_enabled(self, enabled: bool):
         """Active/désactive les boutons de mouvement"""
