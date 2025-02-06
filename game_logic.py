@@ -2,10 +2,20 @@ import random
 from typing import Dict, List, Tuple
 
 class GameLogic:
-    def __init__(self, size: int = 10):
+    def __init__(self, size: int = 7):  # Changé de 10 à 7
         self.size = size
-        self.grid = [[' ' for _ in range(size)] for _ in range(size)]
-        self.players: Dict[str, dict] = {}  # {player_name: {'position': (x, y), 'role': 'role'}}
+        # Création de la grille avec des murs sur les bords
+        self.grid = []
+        for y in range(size):
+            row = []
+            for x in range(size):
+                # Si on est sur un bord, on met un mur
+                if x == 0 or x == size-1 or y == 0 or y == size-1:
+                    row.append('#')
+                else:
+                    row.append(' ')
+            self.grid.append(row)
+        self.players: Dict[str, dict] = {}
         self.current_turn = None
         self.game_started = False
 
@@ -66,9 +76,9 @@ class GameLogic:
 
     def is_valid_move(self, x: int, y: int) -> bool:
         """Vérifie si un déplacement est valide"""
-        return (0 <= x < self.size and 
-                0 <= y < self.size and 
-                self.grid[y][x] == ' ')
+        return (0 <= x < self.size and
+                0 <= y < self.size and
+                self.grid[y][x] != '#')
 
     def get_environment(self, player_name: str) -> List[str]:
         """Retourne l'environnement visible d'un joueur"""
@@ -77,19 +87,36 @@ class GameLogic:
 
         x, y = self.players[player_name]['position']
         role = self.players[player_name]['role']
-        vision_range = 2 if role == 'loup' else 1
-
         environment = []
-        for dy in range(-vision_range, vision_range + 1):
-            for dx in range(-vision_range, vision_range + 1):
-                new_x, new_y = x + dx, y + dy
-                if 0 <= new_x < self.size and 0 <= new_y < self.size:
-                    if dx == 0 and dy == 0:
-                        environment.append('P')  # Position du joueur
+
+        # On parcourt toute la grille pour voir les murs (#)
+        for i in range(self.size):
+            for j in range(self.size):
+                # Position actuelle du joueur
+                if i == y and j == x:
+                    environment.append('P')
+                    continue
+
+                # Si c'est un mur, on le voit toujours
+                if self.grid[i][j] == '#':
+                    environment.append('#')
+                    continue
+
+                # Calcul de la distance Manhattan
+                distance = abs(x - j) + abs(y - i)
+
+                # Règles de vision selon le rôle
+                if self.grid[i][j] in ['L', 'V']:
+                    if role == 'loup' and distance <= 1:
+                        # Le loup voit les joueurs à distance 1
+                        environment.append(self.grid[i][j])
+                    elif role == 'villageois' and distance <= 2:
+                        # Les villageois voient à distance 2
+                        environment.append(self.grid[i][j])
                     else:
-                        environment.append(self.grid[new_y][new_x])
+                        environment.append(' ')
                 else:
-                    environment.append('X')  # Hors limites
+                    environment.append(self.grid[i][j])
 
         return environment
 

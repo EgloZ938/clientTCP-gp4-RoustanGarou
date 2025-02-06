@@ -212,6 +212,18 @@ class ClientApp:
         self.main_frame.grid_rowconfigure(1, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
         
+    def handle_role_assignment(self, message):
+        """Gère l'attribution du rôle"""
+        role = message.get("role")
+        messagebox.showinfo("Attribution du rôle", f"Vous êtes un {role}")
+        
+        # Active l'interface de jeu après l'attribution du rôle
+        if not self.game_started:
+            self.start_game_ui()
+        
+        # Met à jour l'affichage du rôle
+        if self.game_ui:
+            self.game_ui.set_role(role)  # Cette ligne met à jour l'affichage du rôle
 
     def send_start_game(self):
         """Envoie la demande de démarrage de partie"""
@@ -348,14 +360,6 @@ class ClientApp:
         # À implémenter selon les besoins
         pass
         
-    def handle_role_assignment(self, message):
-        """Gère l'attribution du rôle"""
-        role = message.get("role")
-        messagebox.showinfo("Attribution du rôle", f"Vous êtes un {role}")
-        # Active l'interface de jeu après l'attribution du rôle
-        if not self.game_started:
-            self.start_game_ui()
-        
     def run(self):
         self.root.mainloop()
         
@@ -373,21 +377,27 @@ class GameUI:
         self.frame = ttk.Frame(parent)
         self.frame.grid()
         self.grid_cells = []
+        self.role_label = None
         self.setup_ui()
 
     def setup_ui(self):
-        # Grille de jeu (5x5 pour supporter la vision du loup)
-        grid_frame = ttk.Frame(self.frame)
+        # Container pour la grille et le rôle
+        container = ttk.Frame(self.frame)
+        container.grid(row=0, column=0, padx=10, pady=10)
+
+        # Grille de jeu (7x7)
+        grid_frame = ttk.Frame(container)
         grid_frame.grid(row=0, column=0, padx=10, pady=10)
 
         # Style pour les cellules
         style = ttk.Style()
         style.configure('Cell.TLabel', font=('TkDefaultFont', 12, 'bold'), padding=5)
 
+        # Création de la grille 7x7
         self.grid_cells = []
-        for i in range(5):
+        for i in range(7):  # Changé de 5 à 7
             row = []
-            for j in range(5):
+            for j in range(7):  # Changé de 5 à 7
                 cell = ttk.Label(
                     grid_frame, 
                     text='', 
@@ -399,6 +409,14 @@ class GameUI:
                 cell.grid(row=i, column=j, padx=1, pady=1)
                 row.append(cell)
             self.grid_cells.append(row)
+
+        # Nouveau : Frame pour le rôle
+        role_frame = ttk.Frame(container)
+        role_frame.grid(row=0, column=1, padx=10, pady=10, sticky='n')
+        
+        ttk.Label(role_frame, text="Votre rôle:", font=('TkDefaultFont', 12, 'bold')).grid(row=0, column=0, pady=(0,5))
+        self.role_label = ttk.Label(role_frame, text="Non défini", font=('TkDefaultFont', 11))
+        self.role_label.grid(row=1, column=0)
 
         # Boutons de contrôle
         control_frame = ttk.Frame(self.frame)
@@ -426,28 +444,42 @@ class GameUI:
         symbols = {
             'L': 'L',    # Loup
             'V': 'V',    # Villageois
-            'P': 'P',    # Joueur (Player)
+            'P': 'P',    # Joueur (vous)
             ' ': '.',    # Case vide
-            'X': '#'     # Hors limites/invisible
+            '#': '■',    # Mur
+            'X': ' '     # Hors limites
         }
         
-        size = 5  # Taille de la grille d'affichage
+        size = 7
         for i in range(size):
             for j in range(size):
                 index = i * size + j
                 if index < len(environment):
                     symbol = symbols.get(environment[index], '?')
+                    
                     # Configuration des couleurs selon le type
                     if symbol == 'L':
-                        cell_style = {'foreground': 'red'}
+                        cell_style = {'foreground': 'red', 'text': symbol}
                     elif symbol == 'V':
-                        cell_style = {'foreground': 'blue'}
+                        cell_style = {'foreground': 'blue', 'text': symbol}
                     elif symbol == 'P':
-                        cell_style = {'foreground': 'green'}
+                        cell_style = {'foreground': 'green', 'text': symbol}
+                    elif symbol == '■':
+                        cell_style = {'foreground': 'black', 'text': symbol}
+                    elif symbol == '.':
+                        cell_style = {'foreground': 'grey', 'text': symbol}
                     else:
-                        cell_style = {'foreground': 'black'}
+                        cell_style = {'foreground': 'black', 'text': symbol}
                     
-                    self.grid_cells[i][j].configure(text=symbol, **cell_style)
+                    self.grid_cells[i][j].configure(**cell_style)
+
+
+    def set_role(self, role: str):
+        """Met à jour l'affichage du rôle"""
+        if role == "loup":
+            self.role_label.configure(text="Loup-Garou", foreground='red')
+        else:
+            self.role_label.configure(text="Villageois", foreground='blue')
 
     def set_move_enabled(self, enabled: bool):
         """Active/désactive les boutons de mouvement"""
