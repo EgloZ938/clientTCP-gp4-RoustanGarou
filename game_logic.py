@@ -59,19 +59,24 @@ class GameLogic:
                         # Si un loup rencontre un villageois
                         if self.players[player_name]['role'] == 'loup' and \
                         other_player['role'] == 'villageois' and \
-                        other_player['status'] == 'alive':  # Vérifie si le villageois n'est pas déjà mort
+                        other_player['status'] == 'alive':
                             other_player['status'] = 'dead'
                             # On enlève le villageois mort de la grille
                             self.grid[other_y][other_x] = ' '
+                            # On efface l'ancienne position du loup
+                            self.grid[y][x] = ' '
+                            # On déplace le loup sur la position du villageois mort
+                            self.grid[new_y][new_x] = 'L'
+                            self.players[player_name]['position'] = (new_x, new_y)
                             return True
 
-            # Efface l'ancienne position
+            # Si pas de collision, mouvement normal
             self.grid[y][x] = ' '
-            # Met à jour la nouvelle position (seulement si vivant)
             if self.players[player_name]['status'] == 'alive':
                 self.grid[new_y][new_x] = 'L' if self.players[player_name]['role'] == 'loup' else 'V'
             self.players[player_name]['position'] = (new_x, new_y)
             return True
+
         return False
 
     def get_new_position(self, x: int, y: int, direction: int) -> Tuple[int, int]:
